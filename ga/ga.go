@@ -4,6 +4,11 @@ import (
 	"math/rand"
 )
 
+type Error struct {
+	ID     int
+	ColRow []int
+}
+
 type ClassConfig struct {
 	Rows    int
 	Columns int
@@ -26,10 +31,12 @@ type Request struct {
 }
 
 type Response struct {
-	SeatID  int
-	Row     int
-	Column  int
-	Student string
+	SeatID   int
+	Row      int
+	Column   int
+	Student  string
+	IgnPrefs []Error
+	IgnFobds []Error
 }
 
 func contains(s []int, elem int) bool {
@@ -50,8 +57,7 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 	for i, studentID := range seating {
 		student := studentMap[studentID]
 		row := i / config.Columns
-		col := i % config.Rows
-
+		col := i % config.Columns
 		if (len(student.PreferredRows) > 0 && !contains(student.PreferredRows, row)) || len(student.PreferredColumns) > 0 && !contains(student.PreferredColumns, col) {
 			score -= 50
 		} else if len(student.PreferredRows) > 0 || len(student.PreferredColumns) > 0 {
@@ -66,7 +72,7 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 	for row := 0; row < config.Rows; row++ {
 		for col := 0; col < config.Columns; col++ {
 			i := row*config.Columns + col
-			if i+1 >= len(seating) {
+			if i+1 >= len(seating) || col%2 != 0 || col+1 >= config.Columns {
 				continue
 			}
 			i1 := seating[i]
@@ -74,7 +80,7 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 
 			for _, pref := range preferences {
 				if (pref[0] == i1 && pref[1] == i2) || (pref[0] == i2 && pref[1] == i1) {
-					score += 10
+					score += 50
 				}
 			}
 			for _, forb := range forbidden {
