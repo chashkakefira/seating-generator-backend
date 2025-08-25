@@ -58,6 +58,9 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 		student := studentMap[studentID]
 		row := i / config.Columns
 		col := i % config.Columns
+		if row == 0 {
+			score += 1000 * config.Columns
+		}
 		if (len(student.PreferredRows) > 0 && !contains(student.PreferredRows, row)) || len(student.PreferredColumns) > 0 && !contains(student.PreferredColumns, col) {
 			score -= 50
 		} else if len(student.PreferredRows) > 0 || len(student.PreferredColumns) > 0 {
