@@ -11,6 +11,7 @@ import (
 type Response struct {
 	Seating []ga.Response
 	Fitness int64
+	Ignored []int
 }
 
 func main() {
@@ -40,7 +41,7 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	seating, fitness := ga.RunGA(req)
+	seating, fitness, ignored := ga.RunGA(req)
 	if seating == nil {
 		http.Error(w, "Invalid input or no solution found", http.StatusBadRequest)
 		return
@@ -48,6 +49,7 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 	response := Response{
 		Seating: seating,
 		Fitness: fitness,
+		Ignored: ignored,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

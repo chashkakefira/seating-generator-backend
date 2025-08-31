@@ -4,11 +4,6 @@ import (
 	"math/rand"
 )
 
-type Error struct {
-	ID     int
-	ColRow []int
-}
-
 type ClassConfig struct {
 	Rows    int
 	Columns int
@@ -31,12 +26,10 @@ type Request struct {
 }
 
 type Response struct {
-	SeatID   int
-	Row      int
-	Column   int
-	Student  string
-	IgnPrefs []Error
-	IgnFobds []Error
+	SeatID  int
+	Row     int
+	Column  int
+	Student string
 }
 
 func contains(s []int, elem int) bool {
@@ -48,7 +41,8 @@ func contains(s []int, elem int) bool {
 	return false
 }
 
-func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig) int64 {
+func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig) (int64, []int) {
+	ignored := make([]int, 0)
 	score := 0
 	studentMap := make(map[int]Student)
 	for _, s := range students {
@@ -58,17 +52,15 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 		student := studentMap[studentID]
 		row := i / config.Columns
 		col := i % config.Columns
-		if row == 0 {
-			score += 1000 * config.Columns
-		}
 		if (len(student.PreferredRows) > 0 && !contains(student.PreferredRows, row)) || len(student.PreferredColumns) > 0 && !contains(student.PreferredColumns, col) {
 			score -= 50
+			ignored = append(ignored, studentID)
 		} else if len(student.PreferredRows) > 0 || len(student.PreferredColumns) > 0 {
 			score += 10
 		}
 
 		if len(student.MedicalPreferredColumns) > 0 && !contains(student.MedicalPreferredColumns, col) || len(student.MedicalPreferredRows) > 0 && !contains(student.MedicalPreferredRows, row) {
-			return -1e9
+			return -1e9, make([]int, 0)
 		}
 
 	}
@@ -89,11 +81,12 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 			for _, forb := range forbidden {
 				if (forb[0] == i1 && forb[1] == i2) || (forb[0] == i2 && forb[1] == i1) {
 					score -= 100
+					ignored = append(ignored, i1, i2)
 				}
 			}
 		}
 	}
-	return int64(score)
+	return int64(score), ignored
 }
 
 func CrossOver(parent1, parent2 []int) []int {
@@ -142,7 +135,7 @@ func SwapMutation(seating []int) []int {
 	return seat
 }
 
-func RunGA(req Request) ([]Response, int64) {
+func RunGA(req Request) ([]Response, int64, []int) {
 	N := len(req.Students)
 	popSize, generations := 300, 400
 	population := make([][]int, popSize)
@@ -151,8 +144,9 @@ func RunGA(req Request) ([]Response, int64) {
 	}
 	for gen := 0; gen < generations; gen++ {
 		scores := make([]int64, popSize)
+		ignored := make([][]int, popSize)
 		for i, seat := range population {
-			scores[i] = fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
+			scores[i], ignored[i] = fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
 
 		}
 		newPop := make([][]int, popSize)
@@ -179,12 +173,13 @@ func RunGA(req Request) ([]Response, int64) {
 	}
 
 	iBest := 0
-	bestAns := fitness(population[0], req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
+	bestAns, bestIgn := fitness(population[0], req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
 	for i, seat := range population {
-		Ans := fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
+		Ans, Ign := fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
 		if Ans > bestAns {
 			bestAns = Ans
 			iBest = i
+			bestIgn = Ign
 		}
 	}
 	best := population[iBest]
@@ -200,5 +195,5 @@ func RunGA(req Request) ([]Response, int64) {
 			Student: req.Students[studentID].Name,
 		}
 	}
-	return response, bestAns
+	return response, bestAns, bestIgn
 }
