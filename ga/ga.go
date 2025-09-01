@@ -26,10 +26,11 @@ type Request struct {
 }
 
 type Response struct {
-	SeatID  int
-	Row     int
-	Column  int
-	Student string
+	SeatID    int
+	Row       int
+	Column    int
+	Student   string
+	StudentID int
 }
 
 func contains(s []int, elem int) bool {
@@ -76,6 +77,8 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 			for _, pref := range preferences {
 				if (pref[0] == i1 && pref[1] == i2) || (pref[0] == i2 && pref[1] == i1) {
 					score += 50
+				} else if pref[0] == i1 || pref[1] == i1 || pref[0] == i2 || pref[1] == i2 {
+					ignored = append(ignored, i1, i2)
 				}
 			}
 			for _, forb := range forbidden {
@@ -189,10 +192,11 @@ func RunGA(req Request) ([]Response, int64, []int) {
 		row := i / req.ClassConfig.Columns
 		col := i % req.ClassConfig.Columns
 		response[i] = Response{
-			SeatID:  i,
-			Row:     row,
-			Column:  col,
-			Student: req.Students[studentID].Name,
+			SeatID:    i,
+			Row:       row,
+			Column:    col,
+			Student:   req.Students[studentID].Name,
+			StudentID: req.Students[studentID].ID,
 		}
 	}
 	return response, bestAns, bestIgn
