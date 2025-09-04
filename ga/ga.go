@@ -144,11 +144,6 @@ func RunGA(req Request) ([]Response, int64, []int) {
 	population := make([][]int, popSize)
 	for i := range population {
 		population[i] = rand.Perm(N)
-		for j := range population[i] {
-			if population[i][j] > len(req.Students)-1 {
-				population[i][j] = -1
-			}
-		}
 	}
 	for gen := 0; gen < generations; gen++ {
 		scores := make([]int64, popSize)
@@ -196,7 +191,7 @@ func RunGA(req Request) ([]Response, int64, []int) {
 	for i, studentID := range best {
 		row := i / req.ClassConfig.Columns
 		col := i % req.ClassConfig.Columns
-		if studentID == -1 {
+		if studentID > len(req.Students)-1 {
 			response[i] = Response{
 				SeatID:    i,
 				Row:       row,
