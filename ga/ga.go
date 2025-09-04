@@ -139,11 +139,16 @@ func SwapMutation(seating []int) []int {
 }
 
 func RunGA(req Request) ([]Response, int64, []int) {
-	N := len(req.Students)
+	N := req.ClassConfig.Columns * req.ClassConfig.Rows
 	popSize, generations := 300, 400
 	population := make([][]int, popSize)
 	for i := range population {
 		population[i] = rand.Perm(N)
+		for j := range population[i] {
+			if population[i][j] > len(req.Students)-1 {
+				population[i][j] = -1
+			}
+		}
 	}
 	for gen := 0; gen < generations; gen++ {
 		scores := make([]int64, popSize)
@@ -191,12 +196,22 @@ func RunGA(req Request) ([]Response, int64, []int) {
 	for i, studentID := range best {
 		row := i / req.ClassConfig.Columns
 		col := i % req.ClassConfig.Columns
-		response[i] = Response{
-			SeatID:    i,
-			Row:       row,
-			Column:    col,
-			Student:   req.Students[studentID].Name,
-			StudentID: req.Students[studentID].ID,
+		if studentID == -1 {
+			response[i] = Response{
+				SeatID:    i,
+				Row:       row,
+				Column:    col,
+				Student:   "-",
+				StudentID: -1,
+			}
+		} else {
+			response[i] = Response{
+				SeatID:    i,
+				Row:       row,
+				Column:    col,
+				Student:   req.Students[studentID].Name,
+				StudentID: req.Students[studentID].ID,
+			}
 		}
 	}
 	return response, bestAns, bestIgn
