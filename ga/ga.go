@@ -54,10 +54,10 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 		row := i / config.Columns
 		col := i % config.Columns
 		if (len(student.PreferredRows) > 0 && !contains(student.PreferredRows, row)) || len(student.PreferredColumns) > 0 && !contains(student.PreferredColumns, col) {
-			score -= 50
+			score -= config.Rows * 20
 			ignored = append(ignored, studentID)
 		} else if len(student.PreferredRows) > 0 || len(student.PreferredColumns) > 0 {
-			score += 10
+			score += config.Rows * 15
 		}
 
 		if len(student.MedicalPreferredColumns) > 0 && !contains(student.MedicalPreferredColumns, col) || len(student.MedicalPreferredRows) > 0 && !contains(student.MedicalPreferredRows, row) {
@@ -68,6 +68,9 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 	for row := 0; row < config.Rows; row++ {
 		for col := 0; col < config.Columns; col++ {
 			i := row*config.Columns + col
+			if seating[i] < len(students) {
+				score += (config.Rows*config.Columns - i) * 20
+			}
 			if i+1 >= len(seating) || col%2 != 0 || col+1 >= config.Columns {
 				continue
 			}
@@ -76,14 +79,14 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 
 			for _, pref := range preferences {
 				if (pref[0] == i1 && pref[1] == i2) || (pref[0] == i2 && pref[1] == i1) {
-					score += 50
+					score += config.Rows * 5
 				} else if pref[0] == i1 || pref[1] == i1 || pref[0] == i2 || pref[1] == i2 {
 					ignored = append(ignored, i1, i2)
 				}
 			}
 			for _, forb := range forbidden {
 				if (forb[0] == i1 && forb[1] == i2) || (forb[0] == i2 && forb[1] == i1) {
-					score -= 100
+					score -= config.Rows * 10
 					ignored = append(ignored, i1, i2)
 				}
 			}
