@@ -19,10 +19,14 @@ type Student struct {
 }
 
 type Request struct {
-	Students    []Student
-	Preferences [][]int
-	Forbidden   [][]int
-	ClassConfig ClassConfig
+	Students        []Student
+	Preferences     [][]int
+	Forbidden       [][]int
+	ClassConfig     ClassConfig
+	PopSize         int
+	Generations     int
+	CrossOverChance float64
+	Priority        []int
 }
 
 type Response struct {
@@ -42,7 +46,7 @@ func contains(s []int, elem int) bool {
 	return false
 }
 
-func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig) (int64, []int) {
+func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig, priority []int) (int64, []int) {
 	ignored := make([]int, 0)
 	score := 0
 	studentMap := make(map[int]Student)
@@ -54,14 +58,14 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 		row := i / config.Columns
 		col := i % config.Columns
 		if (len(student.PreferredRows) > 0 && !contains(student.PreferredRows, row)) || len(student.PreferredColumns) > 0 && !contains(student.PreferredColumns, col) {
-			score -= config.Rows * 20
+			score -= priority[1] * config.Rows
 			ignored = append(ignored, studentID)
 		} else if len(student.PreferredRows) > 0 || len(student.PreferredColumns) > 0 {
-			score += config.Rows * 15
+			score += priority[1] * config.Rows
 		}
 
 		if len(student.MedicalPreferredColumns) > 0 && !contains(student.MedicalPreferredColumns, col) || len(student.MedicalPreferredRows) > 0 && !contains(student.MedicalPreferredRows, row) {
-			return -1e9, make([]int, 0)
+			score -= priority[0]
 		}
 
 	}
@@ -69,7 +73,7 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 		for col := 0; col < config.Columns; col++ {
 			i := row*config.Columns + col
 			if seating[i] < len(students) {
-				score += (config.Rows*config.Columns - i) * 20
+				score += (config.Rows*config.Columns - i)
 			}
 			if i+1 >= len(seating) || col%2 != 0 || col+1 >= config.Columns {
 				continue
@@ -79,14 +83,14 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 
 			for _, pref := range preferences {
 				if (pref[0] == i1 && pref[1] == i2) || (pref[0] == i2 && pref[1] == i1) {
-					score += config.Rows * 5
+					score += config.Rows * priority[3]
 				} else if pref[0] == i1 || pref[1] == i1 || pref[0] == i2 || pref[1] == i2 {
 					ignored = append(ignored, i1, i2)
 				}
 			}
 			for _, forb := range forbidden {
 				if (forb[0] == i1 && forb[1] == i2) || (forb[0] == i2 && forb[1] == i1) {
-					score -= config.Rows * 10
+					score -= config.Rows * priority[2]
 					ignored = append(ignored, i1, i2)
 				}
 			}
@@ -143,7 +147,11 @@ func SwapMutation(seating []int) []int {
 
 func RunGA(req Request) ([]Response, int64, []int) {
 	N := req.ClassConfig.Columns * req.ClassConfig.Rows
-	popSize, generations := 300, 400
+	popSize, generations := req.PopSize, req.Generations
+	priorities := make([]int, 4)
+	for i := range req.Priority {
+		priorities[req.Priority[i]] = i + 1
+	}
 	population := make([][]int, popSize)
 	for i := range population {
 		population[i] = rand.Perm(N)
@@ -152,7 +160,7 @@ func RunGA(req Request) ([]Response, int64, []int) {
 		scores := make([]int64, popSize)
 		ignored := make([][]int, popSize)
 		for i, seat := range population {
-			scores[i], ignored[i] = fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
+			scores[i], ignored[i] = fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig, priorities)
 
 		}
 		newPop := make([][]int, popSize)
@@ -170,7 +178,7 @@ func RunGA(req Request) ([]Response, int64, []int) {
 		for i := popSize / 2; i < popSize; i++ {
 			parent1, parent2 := newPop[rand.Intn(popSize/2)], newPop[rand.Intn(popSize/2)]
 			child := CrossOver(parent1, parent2)
-			if rand.Float64() < 0.3 {
+			if rand.Float64() < req.CrossOverChance {
 				child = SwapMutation(child)
 			}
 			newPop[i] = child
@@ -179,9 +187,9 @@ func RunGA(req Request) ([]Response, int64, []int) {
 	}
 
 	iBest := 0
-	bestAns, bestIgn := fitness(population[0], req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
+	bestAns, bestIgn := fitness(population[0], req.Students, req.Preferences, req.Forbidden, req.ClassConfig, priorities)
 	for i, seat := range population {
-		Ans, Ign := fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig)
+		Ans, Ign := fitness(seat, req.Students, req.Preferences, req.Forbidden, req.ClassConfig, priorities)
 		if Ans > bestAns {
 			bestAns = Ans
 			iBest = i
