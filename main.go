@@ -22,7 +22,7 @@ func main() {
 		log.Fatal("Could not load .env file, using defaults")
 	}
 	http.HandleFunc("/generate-seating", generateSeatingHandler)
-	log.Println("Starting server on " + os.Getenv("ALLOWED_ORIGIN"))
+	log.Println("Starting server...")
 	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
 		log.Fatal(err)
 	}
