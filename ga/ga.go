@@ -49,17 +49,16 @@ func contains(s []int, elem int) bool {
 func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig, priority []int) (int64, []int) {
 	ignored := make([]int, 0)
 	score := 0
-	studentMap := make(map[int]Student)
-	for _, s := range students {
-		studentMap[s.ID] = s
-	}
-	for i, studentID := range seating {
-		student := studentMap[studentID]
+	for i, studentIndex := range seating {
+		if studentIndex >= len(students) {
+			continue
+		}
+		student := students[studentIndex]
 		row := i / config.Columns
 		col := i % config.Columns
 		if (len(student.PreferredRows) > 0 && !contains(student.PreferredRows, row)) || len(student.PreferredColumns) > 0 && !contains(student.PreferredColumns, col) {
 			score -= priority[1] * config.Rows
-			ignored = append(ignored, studentID)
+			ignored = append(ignored, student.ID)
 		} else if len(student.PreferredRows) > 0 || len(student.PreferredColumns) > 0 {
 			score += priority[1] * config.Rows
 		}
@@ -80,18 +79,23 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 			}
 			i1 := seating[i]
 			i2 := seating[i+1]
+			if i1 >= len(students) || i2 >= len(students) {
+				continue
+			}
+			i1ID := students[seating[i]].ID
+			i2ID := students[seating[i+1]].ID
 
 			for _, pref := range preferences {
-				if (pref[0] == i1 && pref[1] == i2) || (pref[0] == i2 && pref[1] == i1) {
+				if (pref[0] == i1ID && pref[1] == i2ID) || (pref[0] == i2ID && pref[1] == i1ID) {
 					score += config.Rows * priority[3]
-				} else if pref[0] == i1 || pref[1] == i1 || pref[0] == i2 || pref[1] == i2 {
-					ignored = append(ignored, i1, i2)
+				} else if pref[0] == i1ID || pref[1] == i1ID || pref[0] == i2ID || pref[1] == i2ID {
+					ignored = append(ignored, i1ID, i2ID)
 				}
 			}
 			for _, forb := range forbidden {
-				if (forb[0] == i1 && forb[1] == i2) || (forb[0] == i2 && forb[1] == i1) {
+				if (forb[0] == i1ID && forb[1] == i2ID) || (forb[0] == i2ID && forb[1] == i1ID) {
 					score -= config.Rows * priority[2]
-					ignored = append(ignored, i1, i2)
+					ignored = append(ignored, i1ID, i2ID)
 				}
 			}
 		}
@@ -196,13 +200,21 @@ func RunGA(req Request) ([]Response, int64, []int) {
 			bestIgn = Ign
 		}
 	}
-	best := population[iBest]
+	bestIndices := population[iBest]
+	best := make([]int, N)
+	for i, idx := range bestIndices {
+		if idx < len(req.Students) {
+			best[i] = req.Students[idx].ID
+		} else {
+			best[i] = -1
+		}
+	}
 
 	response := make([]Response, N)
 	for i, studentID := range best {
 		row := i / req.ClassConfig.Columns
 		col := i % req.ClassConfig.Columns
-		if studentID > len(req.Students)-1 {
+		if studentID == -1 {
 			response[i] = Response{
 				SeatID:    i,
 				Row:       row,
@@ -211,12 +223,16 @@ func RunGA(req Request) ([]Response, int64, []int) {
 				StudentID: -1,
 			}
 		} else {
-			response[i] = Response{
-				SeatID:    i,
-				Row:       row,
-				Column:    col,
-				Student:   req.Students[studentID].Name,
-				StudentID: req.Students[studentID].ID,
+			for _, student := range req.Students {
+				if student.ID == best[i] {
+					response[i] = Response{
+						SeatID:    i,
+						Row:       row,
+						Column:    col,
+						Student:   student.Name,
+						StudentID: student.ID,
+					}
+				}
 			}
 		}
 	}
