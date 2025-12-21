@@ -20,11 +20,14 @@ type Response struct {
 
 func main() {
 	log.SetFlags(log.LstdFlags)
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Println("WARNING: Could not load .env file, using defaults")
-	}
+	_ = godotenv.Load(".env")
 	port := os.Getenv("PORT")
+	if port == "" {
+		log.Println("No PORT env found, defaulting to 8080")
+		port = "8080"
+	} else {
+		log.Printf("Using PORT from environment: %s", port)
+	}
 	if port == "" {
 		port = "8080"
 	}
