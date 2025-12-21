@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"seating-generator/ga"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -17,13 +19,27 @@ type Response struct {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags)
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Could not load .env file, using defaults")
+		log.Println("WARNING: Could not load .env file, using defaults")
 	}
-	http.HandleFunc("/generate-seating", generateSeatingHandler)
-	log.Println("Starting server...")
-	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	http.HandleFunc("/generate-seating", func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		log.Printf("IN: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
+		generateSeatingHandler(w, r)
+
+		log.Printf("OUT: Completed in %v", time.Since(start))
+	})
+
+	log.Printf("Server starting on port %s...", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -43,15 +59,26 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ga.Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		log.Printf("JSON Decode Error: %v", err)
+		if typeErr, ok := err.(*json.UnmarshalTypeError); ok {
+			msg := fmt.Sprintf("Type error: expected %v in field %v, got %v", typeErr.Type, typeErr.Field, typeErr.Value)
+			http.Error(w, msg, http.StatusBadRequest)
+		} else {
+			http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
+	log.Printf("Task: %d students, %d generations, config %dx%d",
+		len(req.Students), req.Generations, req.ClassConfig.Rows, req.ClassConfig.Columns)
 	seating, fitness, ignored := ga.RunGA(req)
 	if seating == nil {
+		log.Println("GA returned nil seating")
 		http.Error(w, "Invalid input or no solution found", http.StatusBadRequest)
 		return
 	}
+	log.Printf("Solved: Fitness=%d, Conflicts(Ignored)=%d", fitness, len(ignored))
 	response := Response{
 		Seating: seating,
 		Fitness: fitness,
@@ -60,6 +87,7 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Response Encode Error: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
