@@ -177,7 +177,6 @@ func RunGA(req Request) ([]Response, int64, []int) {
 
 		}
 		newPop := make([][]int, popSize)
-		for i := 0; i < popSize/2; i++ {
 			iBest := 0
 			for j := 1; j < popSize; j++ {
 				if scores[j] > scores[iBest] {
@@ -186,7 +185,6 @@ func RunGA(req Request) ([]Response, int64, []int) {
 			}
 			newPop[0] = make([]int, N)
 			copy(newPop[0], population[iBest])
-		}
 		for i := 1; i < popSize; i++ {
 			parent1 := tournamentSelection(population, scores, 3)
 			parent2 := tournamentSelection(population, scores, 3)
