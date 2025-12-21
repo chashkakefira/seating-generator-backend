@@ -69,7 +69,7 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 
 	}
 	for row := 0; row < config.Rows; row++ {
-		for col := 0; col < config.Columns; col++ {
+		for col := 0; col+1 < config.Columns; col++ {
 			i := row*config.Columns + col
 			if seating[i] < len(students) {
 				score += (config.Rows*config.Columns - i)
@@ -84,7 +84,6 @@ func fitness(seating []int, students []Student, preferences, forbidden [][]int, 
 			}
 			i1ID := students[seating[i]].ID
 			i2ID := students[seating[i+1]].ID
-
 			for _, pref := range preferences {
 				if (pref[0] == i1ID && pref[1] == i2ID) || (pref[0] == i2ID && pref[1] == i1ID) {
 					score += config.Rows * priority[3]
@@ -149,6 +148,16 @@ func SwapMutation(seating []int) []int {
 	return seat
 }
 
+func tournamentSelection(population [][]int, scores []int64, k int) []int {
+	bestIdx := -1
+	for i := 0; i < k; i++ {
+		randIdx := rand.Intn(len(population))
+		if bestIdx == -1 || scores[randIdx] > scores[bestIdx] {
+			bestIdx = randIdx
+		}
+	}
+	return population[bestIdx]
+}
 func RunGA(req Request) ([]Response, int64, []int) {
 	N := req.ClassConfig.Columns * req.ClassConfig.Rows
 	popSize, generations := req.PopSize, req.Generations
@@ -175,12 +184,12 @@ func RunGA(req Request) ([]Response, int64, []int) {
 					iBest = j
 				}
 			}
-			newPop[i] = make([]int, N)
-			copy(newPop[i], population[iBest])
-			scores[iBest] = -1e9
+			newPop[0] = make([]int, N)
+			copy(newPop[0], population[iBest])
 		}
-		for i := popSize / 2; i < popSize; i++ {
-			parent1, parent2 := newPop[rand.Intn(popSize/2)], newPop[rand.Intn(popSize/2)]
+		for i := 1; i < popSize; i++ {
+			parent1 := tournamentSelection(population, scores, 3)
+			parent2 := tournamentSelection(population, scores, 3)
 			child := CrossOver(parent1, parent2)
 			if rand.Float64() < req.CrossOverChance {
 				child = SwapMutation(child)
