@@ -23,13 +23,10 @@ func main() {
 	_ = godotenv.Load(".env")
 	port := os.Getenv("PORT")
 	if port == "" {
-		log.Println("No PORT env found, defaulting to 8080")
-		port = "8080"
+		log.Println("No PORT env found, defaulting to 5000")
+		port = "5000"
 	} else {
 		log.Printf("Using PORT from environment: %s", port)
-	}
-	if port == "" {
-		port = "8080"
 	}
 	http.HandleFunc("/generate-seating", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
