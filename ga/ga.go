@@ -165,6 +165,7 @@ func checkFriends(student Student, seating []int, row, col int, w Weights, confi
 	}
 	return score
 }
+
 func checkEnemies(student Student, seating []int, row, col int, w Weights, config ClassConfig, enemies SocialMap, students []Student) int {
 	penalty := 0
 	for dcol := -1; dcol <= 1; dcol++ {
@@ -195,22 +196,26 @@ func checkEnemies(student Student, seating []int, row, col int, w Weights, confi
 	return penalty
 }
 
+func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, config ClassConfig, friends, enemies SocialMap, students []Student) int {
+	score := 0
+	if studentIndex >= len(students) || studentIndex < 0 {
+		score -= (config.Rows - row) * w.RowBonus
+		return score
+	}
+	student := students[studentIndex]
+	score += (config.Rows - row) * w.RowBonus
+	score += (config.Columns - col) * w.PosBonus
+	score += checkMed(student, row, col, w)
+	score += checkPref(student, row, col, w, config)
+	score += checkFriends(student, seating, row, col, w, config, friends, students)
+	score += checkEnemies(student, seating, row, col, w, config, enemies, students)
+	return score
+}
+
 func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig, w Weights, friends SocialMap, enemies SocialMap) int {
 	score := 0
 	for i, studentIndex := range seating {
-		row := i / config.Columns
-		col := i % config.Columns
-		if studentIndex >= len(students) || studentIndex < 0 {
-			score -= (config.Rows - row) * w.RowBonus
-			continue
-		}
-		student := students[studentIndex]
-		score += (config.Rows - row) * w.RowBonus
-		score += (config.Columns - col) * w.PosBonus
-		score += checkMed(student, row, col, w)
-		score += checkPref(student, row, col, w, config)
-		score += checkFriends(student, seating, row, col, w, config, friends, students)
-		score += checkEnemies(student, seating, row, col, w, config, enemies, students)
+		score += studentsSatisfaction(seating, i/config.Columns, i%config.Columns, studentIndex, w, config, friends, enemies, students)
 	}
 	return score
 }
