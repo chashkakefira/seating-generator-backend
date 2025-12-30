@@ -15,7 +15,6 @@ import (
 type Response struct {
 	Seating []ga.Response
 	Fitness int
-	Ignored []int
 }
 
 func main() {
@@ -72,17 +71,16 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Task: %d students, %d generations, config %dx%d",
 		len(req.Students), req.Generations, req.ClassConfig.Rows, req.ClassConfig.Columns)
-	seating, fitness, ignored := ga.RunGA(req)
+	seating, fitness := ga.RunGA(req)
 	if seating == nil {
 		log.Println("GA returned nil seating")
 		http.Error(w, "Invalid input or no solution found", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Solved: Fitness=%d, Conflicts(Ignored)=%d", fitness, len(ignored))
+	log.Printf("Solved: Fitness=%d", fitness)
 	response := Response{
 		Seating: seating,
 		Fitness: fitness,
-		Ignored: ignored,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
