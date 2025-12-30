@@ -79,6 +79,8 @@ func calculateWeights(config ClassConfig, pw PriorityWeights) Weights {
 	}
 }
 
+type SocialMap map[int]map[int]bool
+
 func contains(s []int, elem int) bool {
 	for _, v := range s {
 		if v == elem {
@@ -86,6 +88,32 @@ func contains(s []int, elem int) bool {
 		}
 	}
 	return false
+}
+
+func buildSocialMap(req Request) (SocialMap, SocialMap) {
+	friends := make(SocialMap)
+	enemies := make(SocialMap)
+	for _, pair := range req.Preferences {
+		if friends[pair[0]] == nil {
+			friends[pair[0]] = make(map[int]bool)
+		}
+		if friends[pair[1]] == nil {
+			friends[pair[1]] = make(map[int]bool)
+		}
+		friends[pair[0]][pair[1]] = true
+		friends[pair[0]][pair[1]] = true
+	}
+	for _, pair := range req.Forbidden {
+		if enemies[pair[0]] == nil {
+			enemies[pair[0]] = make(map[int]bool)
+		}
+		if enemies[pair[1]] == nil {
+			enemies[pair[1]] = make(map[int]bool)
+		}
+		enemies[pair[0]][pair[1]] = true
+		enemies[pair[1]][pair[0]] = true
+	}
+	return friends, enemies
 }
 
 func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig, w Weights) (int64, []int) {
