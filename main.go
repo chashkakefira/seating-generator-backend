@@ -14,7 +14,7 @@ import (
 
 type Response struct {
 	Seating []ga.Response
-	Fitness int64
+	Fitness int
 	Ignored []int
 }
 
