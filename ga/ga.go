@@ -331,6 +331,57 @@ func CrossOver(parent1, parent2 []int) []int {
 	return child
 }
 
+func localSearch(seating []int, students []Student, config ClassConfig, w Weights, friends, enemies SocialMap) []int {
+	currentSeating := make([]int, len(seating))
+	copy(currentSeating, seating)
+
+	currentFitness := fitness(currentSeating, students, nil, nil, config, w, friends, enemies)
+	for pass := 0; pass < 5; pass++ {
+		improved := false
+
+		worstStudentIdx := -1
+		minLevel := 1.1
+
+		for i, studentIndex := range currentSeating {
+			if studentIndex < 0 || studentIndex >= len(students) {
+				continue
+			}
+			row, col := i/config.Columns, i%config.Columns
+			details := getSatisfactionDetails(currentSeating, row, col, studentIndex, w, config, friends, enemies, students)
+
+			if details.Level < minLevel {
+				minLevel = details.Level
+				worstStudentIdx = i
+			}
+		}
+		if worstStudentIdx == -1 || minLevel >= 1.0 {
+			break
+		}
+		for j := 0; j < len(currentSeating); j++ {
+			if j == worstStudentIdx {
+				continue
+			}
+
+			currentSeating[worstStudentIdx], currentSeating[j] = currentSeating[j], currentSeating[worstStudentIdx]
+			newFitness := fitness(currentSeating, students, nil, nil, config, w, friends, enemies)
+
+			if newFitness > currentFitness {
+				currentFitness = newFitness
+				improved = true
+				break
+			} else {
+				currentSeating[worstStudentIdx], currentSeating[j] = currentSeating[j], currentSeating[worstStudentIdx]
+			}
+		}
+
+		if !improved {
+			break
+		}
+	}
+
+	return currentSeating
+}
+
 func SwapMutation(seating []int) []int {
 	seat := make([]int, len(seating))
 	copy(seat, seating)
@@ -369,6 +420,12 @@ func RunGA(req Request) ([]Response, int) {
 		for j := 1; j < popSize; j++ {
 			if scores[j] > scores[iBest] {
 				iBest = j
+			}
+		}
+		for i := 0; i < popSize; i++ {
+			if i == iBest || rand.Float64() < 0.05 {
+				population[i] = localSearch(population[iBest], req.Students, req.ClassConfig, weights, friends, enemies)
+				scores[i] = fitness(population[iBest], req.Students, req.Preferences, req.Forbidden, req.ClassConfig, weights, friends, enemies)
 			}
 		}
 		newPop[0] = make([]int, N)
