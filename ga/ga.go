@@ -29,12 +29,24 @@ type Request struct {
 	PriorityWeights PriorityWeights
 }
 
+type SatisfactionDetails struct {
+	Total      int
+	Medical    int
+	Friends    int
+	Enemies    int
+	Pref       int
+	RowBonus   int
+	Level      float64
+	Complaints []string
+}
+
 type Response struct {
-	SeatID    int
-	Row       int
-	Column    int
-	Student   string
-	StudentID int
+	SeatID       int
+	Row          int
+	Column       int
+	Student      string
+	StudentID    int
+	Satisfaction SatisfactionDetails
 }
 
 type PriorityWeights struct {
@@ -56,7 +68,7 @@ type Weights struct {
 
 func calculateWeights(config ClassConfig, pw PriorityWeights) Weights {
 	const (
-		BASE_FILL   = 5000
+		BASE_FILL   = 200
 		BASE_PREF   = 8000
 		BASE_FRIEND = 10000
 		BASE_HARD   = 15000
@@ -123,10 +135,18 @@ func buildSocialMap(req Request) (SocialMap, SocialMap) {
 }
 
 func checkMed(student Student, row, col int, w Weights) int {
-	if len(student.MedicalPreferredColumns) > 0 && !contains(student.MedicalPreferredColumns, col) || len(student.MedicalPreferredRows) > 0 && !contains(student.MedicalPreferredRows, row) {
-		return -w.MedPenalty
+	score := 0
+	if len(student.MedicalPreferredColumns) > 0 && contains(student.MedicalPreferredColumns, col) {
+		score += w.MedPenalty * 4
+	} else if len(student.MedicalPreferredColumns) > 0 {
+		score -= w.MedPenalty * 5
 	}
-	return 0
+	if len(student.MedicalPreferredRows) > 0 && contains(student.MedicalPreferredRows, row) {
+		score += w.MedPenalty * 4
+	} else if len(student.MedicalPreferredRows) > 0 {
+		score -= w.MedPenalty * 5
+	}
+	return score
 }
 
 func checkPref(student Student, row, col int, w Weights, config ClassConfig) int {
@@ -199,8 +219,7 @@ func checkEnemies(student Student, seating []int, row, col int, w Weights, confi
 func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, config ClassConfig, friends, enemies SocialMap, students []Student) int {
 	score := 0
 	if studentIndex >= len(students) || studentIndex < 0 {
-		score -= (config.Rows - row) * w.RowBonus
-		return score
+		return 0
 	}
 	student := students[studentIndex]
 	score += (config.Rows - row) * w.RowBonus
@@ -210,6 +229,60 @@ func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, 
 	score += checkFriends(student, seating, row, col, w, config, friends, students)
 	score += checkEnemies(student, seating, row, col, w, config, enemies, students)
 	return score
+}
+
+func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights, config ClassConfig, friends, enemies SocialMap, students []Student) SatisfactionDetails {
+	var details SatisfactionDetails
+	student := students[studentIndex]
+
+	details.Medical = checkMed(student, row, col, w)
+	details.Pref = checkPref(student, row, col, w, config)
+	details.Friends = checkFriends(student, seating, row, col, w, config, friends, students)
+	details.Enemies = checkEnemies(student, seating, row, col, w, config, enemies, students)
+
+	details.Total = details.Medical + details.Pref + details.Friends + details.Enemies
+
+	if details.Medical < 0 {
+		details.Complaints = append(details.Complaints, "Нарушены медицинские показания")
+	}
+	if details.Enemies < 0 {
+		details.Complaints = append(details.Complaints, "Рядом сидит нежелательный человек")
+	}
+	maxPossible := 0
+
+	if len(student.PreferredRows) > 0 || len(student.PreferredColumns) > 0 {
+		maxPossible += w.PrefBonus
+	}
+
+	if len(friends[student.ID]) > 0 {
+		maxPossible += w.FriendBonus
+	}
+
+	if maxPossible <= 0 {
+		details.Level = 1.0
+	} else {
+		positiveGain := 0
+		if details.Pref > 0 {
+			positiveGain += details.Pref
+		}
+		if details.Friends > 0 {
+			positiveGain += details.Friends
+		}
+
+		details.Level = float64(positiveGain) / float64(maxPossible)
+	}
+	if details.Medical < 0 || details.Enemies < 0 {
+		details.Level = 0.0
+	}
+
+	if details.Level > 1.0 {
+		details.Level = 1.0
+	}
+	if details.Level < 0.0 {
+		details.Level = 0.0
+	}
+
+	return details
 }
 
 func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig, w Weights, friends SocialMap, enemies SocialMap) int {
@@ -323,6 +396,10 @@ func RunGA(req Request) ([]Response, int) {
 	}
 	bestIndices := population[iBest]
 	best := make([]int, N)
+	studentLookup := make(map[int]Student)
+	for _, s := range req.Students {
+		studentLookup[s.ID] = s
+	}
 	for i, idx := range bestIndices {
 		if idx < len(req.Students) {
 			best[i] = req.Students[idx].ID
@@ -332,29 +409,28 @@ func RunGA(req Request) ([]Response, int) {
 	}
 
 	response := make([]Response, N)
-	for i, studentID := range best {
+	for i, studentIdx := range bestIndices {
 		row := i / req.ClassConfig.Columns
 		col := i % req.ClassConfig.Columns
-		if studentID == -1 {
+
+		if studentIdx >= len(req.Students) || studentIdx < 0 {
 			response[i] = Response{
-				SeatID:    i,
-				Row:       row,
-				Column:    col,
-				Student:   "-",
-				StudentID: -1,
+				SeatID: i, Row: row, Column: col,
+				Student: "-", StudentID: -1,
 			}
-		} else {
-			for _, student := range req.Students {
-				if student.ID == best[i] {
-					response[i] = Response{
-						SeatID:    i,
-						Row:       row,
-						Column:    col,
-						Student:   student.Name,
-						StudentID: student.ID,
-					}
-				}
-			}
+			continue
+		}
+
+		details := getSatisfactionDetails(bestIndices, row, col, studentIdx, weights, req.ClassConfig, friends, enemies, req.Students)
+
+		student := req.Students[studentIdx]
+		response[i] = Response{
+			SeatID:       i,
+			Row:          row,
+			Column:       col,
+			Student:      student.Name,
+			StudentID:    student.ID,
+			Satisfaction: details,
 		}
 	}
 	return response, bestAns
