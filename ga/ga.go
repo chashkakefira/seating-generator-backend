@@ -66,7 +66,7 @@ type Weights struct {
 	PrefBonus    int
 }
 
-func calculateWeights(config ClassConfig, pw PriorityWeights) Weights {
+func calculateWeights(pw PriorityWeights) Weights {
 	const (
 		BASE_FILL   = 200
 		BASE_PREF   = 8000
@@ -403,7 +403,7 @@ func tournamentSelection(population [][]int, scores []int, k int) []int {
 func RunGA(req Request) ([]Response, int) {
 	N := req.ClassConfig.Columns * req.ClassConfig.Rows
 	popSize, generations := req.PopSize, req.Generations
-	weights := calculateWeights(req.ClassConfig, req.PriorityWeights)
+	weights := calculateWeights(req.PriorityWeights)
 	population := make([][]int, popSize)
 	for i := range population {
 		population[i] = rand.Perm(N)
