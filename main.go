@@ -9,12 +9,15 @@ import (
 	"seating-generator/ga"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )
 
 type Response struct {
 	Seating []ga.Response
 	Fitness int
+	Date    int64
+	ID      string
 }
 
 func main() {
@@ -81,6 +84,8 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 	response := Response{
 		Seating: seating,
 		Fitness: fitness,
+		Date:    time.Now().Unix(),
+		ID:      uuid.New().String(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
