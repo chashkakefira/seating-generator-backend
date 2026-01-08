@@ -204,36 +204,39 @@ func checkFriends(student Student, seating []int, row, col int, config ClassConf
 
 func checkEnemies(student Student, seating []int, row, col int, config ClassConfig, enemies SocialMap, students []Student) float64 {
 	penalty := 0.0
-	for dcol := -1; dcol <= 1; dcol++ {
-		for drow := -1; drow <= 1; drow++ {
+	for dcol := -2; dcol <= 2; dcol++ {
+		for drow := -2; drow <= 2; drow++ {
 			if dcol == 0 && drow == 0 {
 				continue
 			}
+
 			nrow, ncol := row+drow, col+dcol
 			if nrow < 0 || nrow >= config.Rows || ncol < 0 || ncol >= config.Columns {
 				continue
 			}
+
 			neighborIdx := seating[nrow*config.Columns+ncol]
 			if neighborIdx < 0 || neighborIdx >= len(students) {
 				continue
 			}
+
 			neighborID := students[neighborIdx].ID
 			if enemies[student.ID][neighborID] {
+				distRow := abs(drow)
+				distCol := abs(dcol)
+
 				if drow == 0 && isSameDesk(col, ncol, config.deskType) {
-					penalty += 1
-				} else if abs(drow) == 1 && abs(dcol) == 0 {
-					penalty += 0.7
-				} else if abs(drow) == 0 && abs(dcol) == 1 {
-					penalty += 0.5
+					penalty += 1.0
+				} else if distRow <= 1 && distCol <= 1 {
+					penalty += 0.8
 				} else {
-					penalty += 0.2
+					penalty += 0.5
 				}
 			}
 		}
 	}
 	return penalty
 }
-
 func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, config ClassConfig, friends, enemies SocialMap, students []Student) int {
 	const Base = 100
 	if studentIndex >= len(students) || studentIndex < 0 {
