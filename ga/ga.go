@@ -5,8 +5,9 @@ import (
 )
 
 type ClassConfig struct {
-	Rows    int
-	Columns int
+	Rows     int
+	Columns  int
+	deskType string
 }
 
 type Student struct {
@@ -126,6 +127,14 @@ func scorePosition(row, totalRows int) float64 {
 	return 1.0 - (float64(row) / float64(totalRows-1))
 }
 
+func isSameDesk(col1, col2 int, seatType string) bool {
+	seatsPerDesk := 2
+	if seatType == "single" {
+		seatsPerDesk = 1
+	}
+	return col1/seatsPerDesk == col2/seatsPerDesk
+}
+
 func checkMed(student Student, row, col int) float64 {
 	if len(student.MedicalPreferredColumns) == 0 && len(student.MedicalPreferredRows) == 0 {
 		return 0.0
@@ -175,12 +184,14 @@ func checkFriends(student Student, seating []int, row, col int, config ClassConf
 			}
 			neighborID := students[neighborIdx].ID
 			if friends[student.ID][neighborID] {
-				if drow == 0 && col/2 == ncol/2 {
+				if drow == 0 && isSameDesk(col, ncol, config.deskType) {
 					score += 1
-				} else if abs(drow) == 1 && col/2 == ncol/2 {
+				} else if abs(drow) == 1 && abs(dcol) == 0 {
+					score += 0.7
+				} else if abs(drow) == 0 && abs(dcol) == 1 {
 					score += 0.5
 				} else {
-					score += 0.3
+					score += 0.2
 				}
 			}
 		}
@@ -208,12 +219,14 @@ func checkEnemies(student Student, seating []int, row, col int, config ClassConf
 			}
 			neighborID := students[neighborIdx].ID
 			if enemies[student.ID][neighborID] {
-				if drow == 0 && col/2 == ncol/2 {
+				if drow == 0 && isSameDesk(col, ncol, config.deskType) {
 					penalty += 1
-				} else if abs(drow) == 1 && col/2 == ncol/2 {
+				} else if abs(drow) == 1 && abs(dcol) == 0 {
+					penalty += 0.7
+				} else if abs(drow) == 0 && abs(dcol) == 1 {
 					penalty += 0.5
 				} else {
-					penalty += 0.3
+					penalty += 0.2
 				}
 			}
 		}
