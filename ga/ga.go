@@ -1,6 +1,7 @@
 package ga
 
 import (
+	"math"
 	"math/rand"
 )
 
@@ -68,21 +69,20 @@ type Weights struct {
 
 func calculateWeights(pw PriorityWeights) Weights {
 	const (
-		BASE_FILL   = 200
-		BASE_PREF   = 8000
+		BASE_FILL   = 15000
+		BASE_PREF   = 4000
 		BASE_FRIEND = 10000
-		BASE_HARD   = 15000
+		BASE_HARD   = 20000
 	)
-
-	wFill := int(pw.Fill * float64(BASE_FILL))
+	fillMultiplier := math.Pow(pw.Fill, 3)
+	wFill := int(fillMultiplier * float64(BASE_FILL))
 	wPref := int(pw.Preferences * float64(BASE_PREF))
 	wFriend := int(pw.Friends * float64(BASE_FRIEND))
 	wMed := int(pw.Medical * float64(BASE_HARD))
 	wEnemy := int(pw.Enemies * float64(BASE_HARD))
 	return Weights{
-		RowBonus: wFill * 2,
-		PosBonus: wFill,
-
+		RowBonus:     wFill * 5,
+		PosBonus:     wFill,
 		PrefBonus:    wPref,
 		EnemyPenalty: wEnemy,
 		FriendBonus:  wFriend,
@@ -222,7 +222,8 @@ func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, 
 		return 0
 	}
 	student := students[studentIndex]
-	score += (config.Rows - row) * w.RowBonus
+	rowFactor := float64(config.Rows - row)
+	score += int(math.Pow(rowFactor, 2)) * w.RowBonus
 	score += (config.Columns - col) * w.PosBonus
 	score += checkMed(student, row, col, w)
 	score += checkPref(student, row, col, w, config)
@@ -239,8 +240,10 @@ func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights
 	details.Pref = checkPref(student, row, col, w, config)
 	details.Friends = checkFriends(student, seating, row, col, w, config, friends, students)
 	details.Enemies = checkEnemies(student, seating, row, col, w, config, enemies, students)
+	rowFactor := 1.0 - (float64(row) / float64(config.Rows-1))
+	details.RowBonus = int(rowFactor * float64(w.RowBonus))
 
-	details.Total = details.Medical + details.Pref + details.Friends + details.Enemies
+	details.Total = details.Medical + details.Pref + details.Friends + details.Enemies + details.RowBonus
 
 	if details.Medical < 0 {
 		details.Complaints = append(details.Complaints, "Нарушены медицинские показания")
@@ -288,6 +291,10 @@ func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights
 func fitness(seating []int, students []Student, preferences, forbidden [][]int, config ClassConfig, w Weights, friends SocialMap, enemies SocialMap) int {
 	score := 0
 	for i, studentIndex := range seating {
+		if studentIndex >= len(students) || studentIndex < 0 {
+			score -= (config.Rows - i/config.Columns) * w.RowBonus * 10
+			continue
+		}
 		score += studentsSatisfaction(seating, i/config.Columns, i%config.Columns, studentIndex, w, config, friends, enemies, students)
 	}
 	return score
