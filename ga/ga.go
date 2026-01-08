@@ -348,54 +348,24 @@ func CrossOver(parent1, parent2 []int) []int {
 }
 
 func localSearch(seating []int, students []Student, config ClassConfig, w Weights, friends, enemies SocialMap) []int {
-	currentSeating := make([]int, len(seating))
-	copy(currentSeating, seating)
+	current := make([]int, len(seating))
+	copy(current, seating)
+	currentFit := fitness(current, students, config, w, friends, enemies)
 
-	currentFitness := fitness(currentSeating, students, config, w, friends, enemies)
-	for pass := 0; pass < 5; pass++ {
-		improved := false
+	for i := 0; i < 20; i++ {
+		idx1 := rand.Intn(len(current))
+		idx2 := rand.Intn(len(current))
 
-		worstStudentIdx := -1
-		minLevel := 1.1
+		current[idx1], current[idx2] = current[idx2], current[idx1]
+		newFit := fitness(current, students, config, w, friends, enemies)
 
-		for i, studentIndex := range currentSeating {
-			if studentIndex < 0 || studentIndex >= len(students) {
-				continue
-			}
-			row, col := i/config.Columns, i%config.Columns
-			details := getSatisfactionDetails(currentSeating, row, col, studentIndex, w, config, friends, enemies, students)
-
-			if details.Level < minLevel {
-				minLevel = details.Level
-				worstStudentIdx = i
-			}
-		}
-		if worstStudentIdx == -1 || minLevel >= 1.0 {
-			break
-		}
-		for j := 0; j < len(currentSeating); j++ {
-			if j == worstStudentIdx {
-				continue
-			}
-
-			currentSeating[worstStudentIdx], currentSeating[j] = currentSeating[j], currentSeating[worstStudentIdx]
-			newFitness := fitness(currentSeating, students, config, w, friends, enemies)
-
-			if newFitness > currentFitness {
-				currentFitness = newFitness
-				improved = true
-				break
-			} else {
-				currentSeating[worstStudentIdx], currentSeating[j] = currentSeating[j], currentSeating[worstStudentIdx]
-			}
-		}
-
-		if !improved {
-			break
+		if newFit > currentFit {
+			currentFit = newFit
+		} else {
+			current[idx1], current[idx2] = current[idx2], current[idx1]
 		}
 	}
-
-	return currentSeating
+	return current
 }
 
 func SwapMutation(seating []int) []int {
@@ -414,7 +384,9 @@ func tournamentSelection(population [][]int, scores []int, k int) []int {
 			bestIdx = randIdx
 		}
 	}
-	return population[bestIdx]
+	cp := make([]int, len(population[bestIdx]))
+	copy(cp, population[bestIdx])
+	return cp
 }
 func RunGA(req Request) ([]Response, int) {
 	N := req.ClassConfig.Columns * req.ClassConfig.Rows
@@ -427,30 +399,27 @@ func RunGA(req Request) ([]Response, int) {
 	friends, enemies := buildSocialMap(req)
 	for gen := 0; gen < generations; gen++ {
 		scores := make([]int, popSize)
-		for i, seat := range population {
-			scores[i] = fitness(seat, req.Students, req.ClassConfig, weights, friends, enemies)
-
-		}
-		newPop := make([][]int, popSize)
 		iBest := 0
-		for j := 1; j < popSize; j++ {
-			if scores[j] > scores[iBest] {
-				iBest = j
+		for i := range population {
+			scores[i] = fitness(population[i], req.Students, req.ClassConfig, weights, friends, enemies)
+			if scores[i] > scores[iBest] {
+				iBest = i
 			}
 		}
-		for i := 0; i < popSize; i++ {
-			if i == iBest || rand.Float64() < 0.05 {
-				population[i] = localSearch(population[iBest], req.Students, req.ClassConfig, weights, friends, enemies)
-				scores[i] = fitness(population[iBest], req.Students, req.ClassConfig, weights, friends, enemies)
-			}
-		}
-		newPop[0] = make([]int, N)
-		copy(newPop[0], population[iBest])
+
+		newPop := make([][]int, popSize)
+
+		bestCopy := make([]int, N)
+		copy(bestCopy, population[iBest])
+		newPop[0] = localSearch(bestCopy, req.Students, req.ClassConfig, weights, friends, enemies)
+
 		for i := 1; i < popSize; i++ {
-			parent1 := tournamentSelection(population, scores, 3)
-			parent2 := tournamentSelection(population, scores, 3)
-			child := CrossOver(parent1, parent2)
-			if rand.Float64() < req.CrossOverChance {
+			p1 := tournamentSelection(population, scores, 3)
+			p2 := tournamentSelection(population, scores, 3)
+
+			child := CrossOver(p1, p2)
+
+			if rand.Float64() < 0.2 {
 				child = SwapMutation(child)
 			}
 			newPop[i] = child
