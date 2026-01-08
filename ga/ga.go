@@ -139,20 +139,33 @@ func checkMed(student Student, row, col int) float64 {
 	if len(student.MedicalPreferredColumns) == 0 && len(student.MedicalPreferredRows) == 0 {
 		return 0.0
 	}
-	score := 0.0
-	if len(student.MedicalPreferredColumns) > 0 && contains(student.MedicalPreferredColumns, col) {
-		score += 0.5
-	}
+	rowMatch := false
+	colMatch := false
+
 	if len(student.MedicalPreferredRows) > 0 && contains(student.MedicalPreferredRows, row) {
-		score += 0.5
+		rowMatch = true
 	}
-	if score == 0 {
+	if len(student.MedicalPreferredColumns) > 0 && contains(student.MedicalPreferredColumns, col) {
+		colMatch = true
+	}
+
+	if len(student.MedicalPreferredRows) > 0 && len(student.MedicalPreferredColumns) > 0 {
+		if rowMatch && colMatch {
+			return 1.0
+		}
+		if rowMatch || colMatch {
+			return 0.1
+		}
 		return -1.0
 	}
-	return score
+
+	if rowMatch || colMatch {
+		return 1.0
+	}
+	return -1.0
 }
 
-func checkPref(student Student, row, col int, config ClassConfig) float64 {
+func checkPref(student Student, row, col int) float64 {
 	score := 0.0
 	if len(student.PreferredRows) > 0 && contains(student.PreferredRows, row) {
 		score += 1
@@ -246,7 +259,7 @@ func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, 
 
 	fScore := checkFriends(student, seating, row, col, config, friends, students)
 	mScore := checkMed(student, row, col)
-	pScore := checkPref(student, row, col, config)
+	pScore := checkPref(student, row, col)
 	rScore := scorePosition(row, config.Rows)
 	ePenalty := checkEnemies(student, seating, row, col, config, enemies, students)
 
@@ -257,9 +270,9 @@ func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, 
 	res -= (ePenalty * float64(w.EnemyPenalty) * 5.0)
 
 	if mScore > 0 {
-		res += float64(w.MedPenalty)
+		res += mScore * float64(w.MedPenalty)
 	} else if mScore < 0 {
-		res -= float64(w.MedPenalty) * 10.0
+		res -= float64(w.MedPenalty) * 20.0
 	}
 
 	return int(res * Base)
@@ -270,16 +283,15 @@ func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights
 	student := students[studentIndex]
 
 	mScore := checkMed(student, row, col)
-	pScore := checkPref(student, row, col, config)
+	pScore := checkPref(student, row, col)
 	fScore := checkFriends(student, seating, row, col, config, friends, students)
 	ePenalty := checkEnemies(student, seating, row, col, config, enemies, students)
 	rScore := scorePosition(row, config.Rows)
 
 	details.Medical = 0
 	if mScore > 0 {
-		details.Medical = float64(w.MedPenalty)
-	}
-	if mScore < 0 {
+		details.Medical = mScore * float64(w.MedPenalty)
+	} else if mScore < 0 {
 		details.Medical = -float64(w.MedPenalty) * 10.0
 	}
 
@@ -290,25 +302,34 @@ func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights
 
 	details.Total = details.Medical + details.Pref + details.Friends + details.RowBonus + details.Enemies
 
-	if mScore < 0 {
-		details.Complaints = append(details.Complaints, "Нарушены медицинские показания")
-	}
-	if ePenalty > 0 {
-		details.Complaints = append(details.Complaints, "Рядом сидит нежелательный человек")
+	potentialMed := 0.0
+	if len(student.MedicalPreferredRows) > 0 || len(student.MedicalPreferredColumns) > 0 {
+		potentialMed = float64(w.MedPenalty)
 	}
 
-	maxPossible := float64(w.PrefBonus + w.FriendBonus + w.RowBonus)
+	maxPossible := potentialMed + float64(w.PrefBonus) + float64(w.FriendBonus) + float64(w.RowBonus)
+
 	if maxPossible <= 0 {
 		details.Level = 1.0
 	} else {
-		currentGain := (pScore * float64(w.PrefBonus)) +
+		currentGood := 0.0
+		if mScore > 0 {
+			currentGood += details.Medical
+		}
+		currentGood += (pScore * float64(w.PrefBonus)) +
 			(fScore * float64(w.FriendBonus)) +
 			(rScore * float64(w.RowBonus))
-		details.Level = currentGain / maxPossible
-	}
 
-	if mScore < 0 || ePenalty > 0 {
-		details.Level = 0.0
+		details.Level = currentGood / maxPossible
+
+		if mScore < 0 {
+			details.Level = 0.0
+			details.Complaints = append(details.Complaints, "Нарушены медицинские показания")
+		}
+		if ePenalty > 0 {
+			details.Level *= 0.5
+			details.Complaints = append(details.Complaints, "Рядом сидит нежелательный человек")
+		}
 	}
 
 	return details
