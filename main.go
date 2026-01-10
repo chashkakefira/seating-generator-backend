@@ -15,7 +15,7 @@ import (
 
 type Response struct {
 	Seating []ga.Response
-	Fitness int
+	Fitness float64
 	Date    int64
 	ID      string
 }
@@ -80,7 +80,7 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid input or no solution found", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Solved: Fitness=%d", fitness)
+	log.Printf("Solved: Fitness=%f", fitness)
 	response := Response{
 		Seating: seating,
 		Fitness: fitness,
