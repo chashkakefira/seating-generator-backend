@@ -282,17 +282,70 @@ func CrossOver(r *rand.Rand, parent1, parent2, child []int, used []bool) {
 	}
 }
 
-func localSearch(r *rand.Rand, seating []int, config ClassConfig, w Weights, friends, enemies SocialMap, staticScores []float64, nStudents int) {
+func localSearch(r *rand.Rand, seating []int, config ClassConfig, w Weights, friends, enemies SocialMap, staticScores []float64, nStudents int, opt []optStudent) {
+	N := len(seating)
+	worstIdx := -1
+	minScore := 999999.0
+
+	for i := 0; i < N; i++ {
+		sIdx := seating[i]
+		if sIdx == -1 || sIdx >= nStudents {
+			continue
+		}
+		score := staticScores[sIdx*N+i]
+		if score < minScore {
+			minScore = score
+			worstIdx = i
+		}
+	}
+
+	if worstIdx == -1 {
+		return
+	}
+
 	currentFit := fitness(seating, config, w, friends, enemies, staticScores, nStudents)
 	for i := 0; i < 20; i++ {
-		idx1 := r.Intn(len(seating))
-		idx2 := r.Intn(len(seating))
+		idx1 := worstIdx
+		if r.Float64() < 0.5 {
+			idx1 = r.Intn(N)
+		}
+
+		idx2 := r.Intn(N)
+		if idx1 == idx2 {
+			continue
+		}
+
 		seating[idx1], seating[idx2] = seating[idx2], seating[idx1]
 		newFit := fitness(seating, config, w, friends, enemies, staticScores, nStudents)
+
 		if newFit > currentFit {
 			currentFit = newFit
 		} else {
 			seating[idx1], seating[idx2] = seating[idx2], seating[idx1]
+		}
+	}
+	if r.Float64() < 0.3 {
+		emptySeats := []int{}
+		filledSeats := []int{}
+		for idx, s := range seating {
+			if s == -1 {
+				emptySeats = append(emptySeats, idx)
+			} else {
+				filledSeats = append(filledSeats, idx)
+			}
+		}
+
+		if len(emptySeats) > 0 && len(filledSeats) > 0 {
+			eIdx := emptySeats[r.Intn(len(emptySeats))]
+			fIdx := filledSeats[r.Intn(len(filledSeats))]
+			currentFit := fitness(seating, config, w, friends, enemies, staticScores, nStudents)
+
+			seating[eIdx], seating[fIdx] = seating[fIdx], seating[eIdx]
+
+			newFit := fitness(seating, config, w, friends, enemies, staticScores, nStudents)
+			if newFit < currentFit {
+				seating[eIdx], seating[fIdx] = seating[fIdx], seating[eIdx]
+			}
 		}
 	}
 }
@@ -407,7 +460,7 @@ func RunGA(req Request) ([]Response, float64) {
 		}
 
 		copy(newPop[0], population[iBest])
-		localSearch(rands[0], newPop[0], req.ClassConfig, weights, friends, enemies, staticScores, nStudents)
+		localSearch(rands[0], newPop[0], req.ClassConfig, weights, friends, enemies, staticScores, nStudents, opt)
 
 		for w := 0; w < numCPU; w++ {
 			start, end := w*chunkSize, (w+1)*chunkSize
