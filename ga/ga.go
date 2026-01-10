@@ -2,6 +2,8 @@ package ga
 
 import (
 	"math/rand"
+	"runtime"
+	"sync"
 )
 
 type ClassConfig struct {
@@ -240,54 +242,41 @@ func studentsSatisfaction(seating []int, row, col, studentIndex int, w Weights, 
 		return 0
 	}
 	student := students[studentIndex]
-
 	fScore := checkFriends(student, seating, row, col, config, friends, students)
 	mScore := checkMed(student, row, col)
 	pScore := checkPref(student, row, col)
 	rScore := scorePosition(row, config.Rows)
 	ePenalty := checkEnemies(student, seating, row, col, config, enemies, students)
-
-	res := (fScore * w.FriendBonus) +
-		(pScore * w.PrefBonus) +
-		(rScore * w.RowBonus)
-
+	res := (fScore * w.FriendBonus) + (pScore * w.PrefBonus) + (rScore * w.RowBonus)
 	res -= (ePenalty * w.EnemyPenalty * 5.0)
-
 	if mScore > 0 {
 		res += mScore * w.MedPenalty
 	} else if mScore < 0 {
 		res -= w.MedPenalty * 20.0
 	}
-
 	return res * Base
 }
 
 func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights, config ClassConfig, friends, enemies SocialMap, students []optStudent) SatisfactionDetails {
 	var details SatisfactionDetails
 	student := students[studentIndex]
-
 	mScore := checkMed(student, row, col)
 	pScore := checkPref(student, row, col)
 	fScore := checkFriends(student, seating, row, col, config, friends, students)
 	ePenalty := checkEnemies(student, seating, row, col, config, enemies, students)
 	rScore := scorePosition(row, config.Rows)
-
 	details.Medical = 0
 	if mScore > 0 {
 		details.Medical = mScore * w.MedPenalty
 	} else if mScore < 0 {
 		details.Medical = -w.MedPenalty * 10.0
 	}
-
 	details.Pref = pScore * w.PrefBonus
 	details.Friends = fScore * w.FriendBonus
 	details.RowBonus = rScore * w.RowBonus
 	details.Enemies = ePenalty * w.EnemyPenalty * -5.0
-
 	details.Total = details.Medical + details.Pref + details.Friends + details.RowBonus + details.Enemies
-
 	maxPossible := w.MedPenalty + w.PrefBonus + w.FriendBonus + w.RowBonus
-
 	if maxPossible <= 0 {
 		details.Level = 1.0
 	} else {
@@ -295,12 +284,8 @@ func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights
 		if mScore > 0 {
 			currentGood += details.Medical
 		}
-		currentGood += (pScore * w.PrefBonus) +
-			(fScore * w.FriendBonus) +
-			(rScore * w.RowBonus)
-
+		currentGood += (pScore * w.PrefBonus) + (fScore * w.FriendBonus) + (rScore * w.RowBonus)
 		details.Level = currentGood / maxPossible
-
 		if mScore < 0 {
 			details.Level = 0.0
 			details.Complaints = append(details.Complaints, "Нарушены медицинские показания")
@@ -388,6 +373,7 @@ func RunGA(req Request) ([]Response, float64) {
 	N := req.ClassConfig.Columns * req.ClassConfig.Rows
 	popSize, generations := req.PopSize, req.Generations
 	weights := calculateWeights(req.PriorityWeights)
+	numCPU := runtime.NumCPU()
 
 	idToIndex := make(map[int]int)
 	opt := make([]optStudent, len(req.Students))
@@ -420,15 +406,37 @@ func RunGA(req Request) ([]Response, float64) {
 	for i := range newPop {
 		newPop[i] = make([]int, N)
 	}
-	usedBuf := make([]bool, N)
+	usedBufs := make([][]bool, popSize)
+	for i := range usedBufs {
+		usedBufs[i] = make([]bool, N)
+	}
+
+	scores := make([]float64, popSize)
+	var wg sync.WaitGroup
 
 	for gen := 0; gen < generations; gen++ {
-		scores := make([]float64, popSize)
-		for i := range population {
-			scores[i] = fitness(population[i], opt, req.ClassConfig, weights, friends, enemies)
+		chunkSize := (popSize + numCPU - 1) / numCPU
+		for w := 0; w < numCPU; w++ {
+			start := w * chunkSize
+			end := start + chunkSize
+			if start >= popSize {
+				break
+			}
+			if end > popSize {
+				end = popSize
+			}
+			wg.Add(1)
+			go func(s, e int) {
+				defer wg.Done()
+				for i := s; i < e; i++ {
+					scores[i] = fitness(population[i], opt, req.ClassConfig, weights, friends, enemies)
+				}
+			}(start, end)
 		}
+		wg.Wait()
+
 		iBest := 0
-		for i := range scores {
+		for i := 1; i < popSize; i++ {
 			if scores[i] > scores[iBest] {
 				iBest = i
 			}
@@ -440,9 +448,7 @@ func RunGA(req Request) ([]Response, float64) {
 		for i := 1; i < popSize; i++ {
 			p1Idx := tournamentSelection(population, scores, 3)
 			p2Idx := tournamentSelection(population, scores, 3)
-
-			CrossOver(population[p1Idx], population[p2Idx], newPop[i], usedBuf)
-
+			CrossOver(population[p1Idx], population[p2Idx], newPop[i], usedBufs[i])
 			if rand.Float64() < 0.2 {
 				SwapMutation(newPop[i])
 			}
