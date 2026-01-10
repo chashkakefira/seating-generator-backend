@@ -21,6 +21,7 @@ type Student struct {
 
 type optStudent struct {
 	Student
+	index int
 	pCols map[int]bool
 	pRows map[int]bool
 	mCols map[int]bool
@@ -84,7 +85,7 @@ func calculateWeights(pw PriorityWeights) Weights {
 	}
 }
 
-type SocialMap map[int]map[int]bool
+type SocialMap []bool
 
 func abs(num int) int {
 	if num < 0 {
@@ -93,28 +94,25 @@ func abs(num int) int {
 	return num
 }
 
-func buildSocialMap(req Request) (SocialMap, SocialMap) {
-	friends := make(SocialMap)
-	enemies := make(SocialMap)
+func buildSocialMap(req Request, idToIndex map[int]int) (SocialMap, SocialMap) {
+	n := len(req.Students)
+	friends := make(SocialMap, n*n)
+	enemies := make(SocialMap, n*n)
 	for _, pair := range req.Preferences {
-		if friends[pair[0]] == nil {
-			friends[pair[0]] = make(map[int]bool)
+		idx1, ok1 := idToIndex[pair[0]]
+		idx2, ok2 := idToIndex[pair[1]]
+		if ok1 && ok2 {
+			friends[idx1*n+idx2] = true
+			friends[idx2*n+idx1] = true
 		}
-		if friends[pair[1]] == nil {
-			friends[pair[1]] = make(map[int]bool)
-		}
-		friends[pair[0]][pair[1]] = true
-		friends[pair[1]][pair[0]] = true
 	}
 	for _, pair := range req.Forbidden {
-		if enemies[pair[0]] == nil {
-			enemies[pair[0]] = make(map[int]bool)
+		idx1, ok1 := idToIndex[pair[0]]
+		idx2, ok2 := idToIndex[pair[1]]
+		if ok1 && ok2 {
+			enemies[idx1*n+idx2] = true
+			enemies[idx2*n+idx1] = true
 		}
-		if enemies[pair[1]] == nil {
-			enemies[pair[1]] = make(map[int]bool)
-		}
-		enemies[pair[0]][pair[1]] = true
-		enemies[pair[1]][pair[0]] = true
 	}
 	return friends, enemies
 }
@@ -171,6 +169,7 @@ func checkPref(student optStudent, row, col int) float64 {
 func checkFriends(student optStudent, seating []int, row, col int, config ClassConfig, friends SocialMap, students []optStudent) float64 {
 	score := 0.0
 	maxScore := 1.5
+	n := len(students)
 	for dcol := -1; dcol <= 1; dcol++ {
 		for drow := -1; drow <= 1; drow++ {
 			if dcol == 0 && drow == 0 {
@@ -181,11 +180,10 @@ func checkFriends(student optStudent, seating []int, row, col int, config ClassC
 				continue
 			}
 			neighborIdx := seating[nrow*config.Columns+ncol]
-			if neighborIdx < 0 || neighborIdx >= len(students) {
+			if neighborIdx < 0 || neighborIdx >= n {
 				continue
 			}
-			neighborID := students[neighborIdx].ID
-			if friends[student.ID][neighborID] {
+			if friends[student.index*n+neighborIdx] {
 				if drow == 0 && isSameDesk(col, ncol, config.deskType) {
 					score += 1
 				} else if abs(drow) == 1 && abs(dcol) == 0 {
@@ -206,6 +204,7 @@ func checkFriends(student optStudent, seating []int, row, col int, config ClassC
 
 func checkEnemies(student optStudent, seating []int, row, col int, config ClassConfig, enemies SocialMap, students []optStudent) float64 {
 	penalty := 0.0
+	n := len(students)
 	for dcol := -2; dcol <= 2; dcol++ {
 		for drow := -2; drow <= 2; drow++ {
 			if dcol == 0 && drow == 0 {
@@ -216,11 +215,10 @@ func checkEnemies(student optStudent, seating []int, row, col int, config ClassC
 				continue
 			}
 			neighborIdx := seating[nrow*config.Columns+ncol]
-			if neighborIdx < 0 || neighborIdx >= len(students) {
+			if neighborIdx < 0 || neighborIdx >= n {
 				continue
 			}
-			neighborID := students[neighborIdx].ID
-			if enemies[student.ID][neighborID] {
+			if enemies[student.index*n+neighborIdx] {
 				distRow := abs(drow)
 				distCol := abs(dcol)
 				if drow == 0 && isSameDesk(col, ncol, config.deskType) {
@@ -399,8 +397,10 @@ func RunGA(req Request) ([]Response, float64) {
 	popSize, generations := req.PopSize, req.Generations
 	weights := calculateWeights(req.PriorityWeights)
 
+	idToIndex := make(map[int]int)
 	opt := make([]optStudent, len(req.Students))
 	for i, s := range req.Students {
+		idToIndex[s.ID] = i
 		m := func(sl []int) map[int]bool {
 			r := make(map[int]bool)
 			for _, v := range sl {
@@ -408,14 +408,21 @@ func RunGA(req Request) ([]Response, float64) {
 			}
 			return r
 		}
-		opt[i] = optStudent{Student: s, pCols: m(s.PreferredColumns), pRows: m(s.PreferredRows), mCols: m(s.MedicalPreferredColumns), mRows: m(s.MedicalPreferredRows)}
+		opt[i] = optStudent{
+			Student: s,
+			index:   i,
+			pCols:   m(s.PreferredColumns),
+			pRows:   m(s.PreferredRows),
+			mCols:   m(s.MedicalPreferredColumns),
+			mRows:   m(s.MedicalPreferredRows),
+		}
 	}
 
 	population := make([][]int, popSize)
 	for i := range population {
 		population[i] = rand.Perm(N)
 	}
-	friends, enemies := buildSocialMap(req)
+	friends, enemies := buildSocialMap(req, idToIndex)
 
 	for gen := 0; gen < generations; gen++ {
 		scores := make([]float64, popSize)
