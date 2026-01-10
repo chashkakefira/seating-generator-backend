@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"runtime"
 	"sync"
+	"time"
 )
 
 type ClassConfig struct {
@@ -253,12 +254,12 @@ func fitness(seating []int, config ClassConfig, w Weights, friends SocialMap, en
 	return score
 }
 
-func CrossOver(parent1, parent2, child []int, used []bool) {
+func CrossOver(r *rand.Rand, parent1, parent2, child []int, used []bool) {
 	N := len(parent1)
 	for i := 0; i < N; i++ {
 		used[i] = false
 	}
-	start, end := rand.Intn(N), rand.Intn(N)
+	start, end := r.Intn(N), r.Intn(N)
 	if start > end {
 		start, end = end, start
 	}
@@ -281,11 +282,11 @@ func CrossOver(parent1, parent2, child []int, used []bool) {
 	}
 }
 
-func localSearch(seating []int, config ClassConfig, w Weights, friends, enemies SocialMap, staticScores []float64, nStudents int) {
+func localSearch(r *rand.Rand, seating []int, config ClassConfig, w Weights, friends, enemies SocialMap, staticScores []float64, nStudents int) {
 	currentFit := fitness(seating, config, w, friends, enemies, staticScores, nStudents)
 	for i := 0; i < 20; i++ {
-		idx1 := rand.Intn(len(seating))
-		idx2 := rand.Intn(len(seating))
+		idx1 := r.Intn(len(seating))
+		idx2 := r.Intn(len(seating))
 		seating[idx1], seating[idx2] = seating[idx2], seating[idx1]
 		newFit := fitness(seating, config, w, friends, enemies, staticScores, nStudents)
 		if newFit > currentFit {
@@ -296,15 +297,15 @@ func localSearch(seating []int, config ClassConfig, w Weights, friends, enemies 
 	}
 }
 
-func SwapMutation(seating []int) {
-	i1, i2 := rand.Intn(len(seating)), rand.Intn(len(seating))
+func SwapMutation(r *rand.Rand, seating []int) {
+	i1, i2 := r.Intn(len(seating)), r.Intn(len(seating))
 	seating[i1], seating[i2] = seating[i2], seating[i1]
 }
 
-func tournamentSelection(population [][]int, scores []float64, k int) int {
-	bestIdx := rand.Intn(len(population))
+func tournamentSelection(r *rand.Rand, population [][]int, scores []float64, k int) int {
+	bestIdx := r.Intn(len(population))
 	for i := 1; i < k; i++ {
-		randIdx := rand.Intn(len(population))
+		randIdx := r.Intn(len(population))
 		if scores[randIdx] > scores[bestIdx] {
 			bestIdx = randIdx
 		}
@@ -355,9 +356,14 @@ func RunGA(req Request) ([]Response, float64) {
 		}
 	}
 
+	rands := make([]*rand.Rand, numCPU)
+	for i := 0; i < numCPU; i++ {
+		rands[i] = rand.New(rand.NewSource(time.Now().UnixNano() + int64(i)))
+	}
+
 	population := make([][]int, popSize)
 	for i := range population {
-		population[i] = rand.Perm(N)
+		population[i] = rands[0].Perm(N)
 	}
 	friends, enemies := buildSocialMap(req, idToIndex)
 
@@ -401,16 +407,34 @@ func RunGA(req Request) ([]Response, float64) {
 		}
 
 		copy(newPop[0], population[iBest])
-		localSearch(newPop[0], req.ClassConfig, weights, friends, enemies, staticScores, nStudents)
+		localSearch(rands[0], newPop[0], req.ClassConfig, weights, friends, enemies, staticScores, nStudents)
 
-		for i := 1; i < popSize; i++ {
-			p1Idx := tournamentSelection(population, scores, 3)
-			p2Idx := tournamentSelection(population, scores, 3)
-			CrossOver(population[p1Idx], population[p2Idx], newPop[i], usedBufs[i])
-			if rand.Float64() < 0.2 {
-				SwapMutation(newPop[i])
+		for w := 0; w < numCPU; w++ {
+			start, end := w*chunkSize, (w+1)*chunkSize
+			if start == 0 {
+				start = 1
 			}
+			if start >= popSize {
+				break
+			}
+			if end > popSize {
+				end = popSize
+			}
+			wg.Add(1)
+			go func(s, e int, r *rand.Rand) {
+				defer wg.Done()
+				for i := s; i < e; i++ {
+					p1Idx := tournamentSelection(r, population, scores, 3)
+					p2Idx := tournamentSelection(r, population, scores, 3)
+					CrossOver(r, population[p1Idx], population[p2Idx], newPop[i], usedBufs[i])
+					if r.Float64() < 0.2 {
+						SwapMutation(r, newPop[i])
+					}
+				}
+			}(start, end, rands[w])
 		}
+		wg.Wait()
+
 		population, newPop = newPop, population
 	}
 
