@@ -325,10 +325,11 @@ func fitness(seating []int, students []optStudent, config ClassConfig, w Weights
 	return score
 }
 
-func CrossOver(parent1, parent2 []int) []int {
+func CrossOver(parent1, parent2, child []int, used []bool) {
 	N := len(parent1)
-	child := make([]int, N)
-	used := make(map[int]bool, N)
+	for i := 0; i < N; i++ {
+		used[i] = false
+	}
 	start, end := rand.Intn(N), rand.Intn(N)
 	if start > end {
 		start, end = end, start
@@ -350,46 +351,37 @@ func CrossOver(parent1, parent2 []int) []int {
 			}
 		}
 	}
-	return child
 }
 
-func localSearch(seating []int, students []optStudent, config ClassConfig, w Weights, friends, enemies SocialMap) []int {
-	current := make([]int, len(seating))
-	copy(current, seating)
-	currentFit := fitness(current, students, config, w, friends, enemies)
+func localSearch(seating []int, students []optStudent, config ClassConfig, w Weights, friends, enemies SocialMap) {
+	currentFit := fitness(seating, students, config, w, friends, enemies)
 	for i := 0; i < 20; i++ {
-		idx1 := rand.Intn(len(current))
-		idx2 := rand.Intn(len(current))
-		current[idx1], current[idx2] = current[idx2], current[idx1]
-		newFit := fitness(current, students, config, w, friends, enemies)
+		idx1 := rand.Intn(len(seating))
+		idx2 := rand.Intn(len(seating))
+		seating[idx1], seating[idx2] = seating[idx2], seating[idx1]
+		newFit := fitness(seating, students, config, w, friends, enemies)
 		if newFit > currentFit {
 			currentFit = newFit
 		} else {
-			current[idx1], current[idx2] = current[idx2], current[idx1]
+			seating[idx1], seating[idx2] = seating[idx2], seating[idx1]
 		}
 	}
-	return current
 }
 
-func SwapMutation(seating []int) []int {
-	seat := make([]int, len(seating))
-	copy(seat, seating)
-	i1, i2 := rand.Intn(len(seat)), rand.Intn(len(seat))
-	seat[i1], seat[i2] = seat[i2], seat[i1]
-	return seat
+func SwapMutation(seating []int) {
+	i1, i2 := rand.Intn(len(seating)), rand.Intn(len(seating))
+	seating[i1], seating[i2] = seating[i2], seating[i1]
 }
 
-func tournamentSelection(population [][]int, scores []float64, k int) []int {
-	bestIdx := -1
-	for i := 0; i < k; i++ {
+func tournamentSelection(population [][]int, scores []float64, k int) int {
+	bestIdx := rand.Intn(len(population))
+	for i := 1; i < k; i++ {
 		randIdx := rand.Intn(len(population))
-		if bestIdx == -1 || scores[randIdx] > scores[bestIdx] {
+		if scores[randIdx] > scores[bestIdx] {
 			bestIdx = randIdx
 		}
 	}
-	cp := make([]int, len(population[bestIdx]))
-	copy(cp, population[bestIdx])
-	return cp
+	return bestIdx
 }
 
 func RunGA(req Request) ([]Response, float64) {
@@ -424,6 +416,12 @@ func RunGA(req Request) ([]Response, float64) {
 	}
 	friends, enemies := buildSocialMap(req, idToIndex)
 
+	newPop := make([][]int, popSize)
+	for i := range newPop {
+		newPop[i] = make([]int, N)
+	}
+	usedBuf := make([]bool, N)
+
 	for gen := 0; gen < generations; gen++ {
 		scores := make([]float64, popSize)
 		for i := range population {
@@ -435,26 +433,27 @@ func RunGA(req Request) ([]Response, float64) {
 				iBest = i
 			}
 		}
-		newPop := make([][]int, popSize)
-		bestCopy := make([]int, N)
-		copy(bestCopy, population[iBest])
-		newPop[0] = localSearch(bestCopy, opt, req.ClassConfig, weights, friends, enemies)
+
+		copy(newPop[0], population[iBest])
+		localSearch(newPop[0], opt, req.ClassConfig, weights, friends, enemies)
+
 		for i := 1; i < popSize; i++ {
-			p1 := tournamentSelection(population, scores, 3)
-			p2 := tournamentSelection(population, scores, 3)
-			child := CrossOver(p1, p2)
+			p1Idx := tournamentSelection(population, scores, 3)
+			p2Idx := tournamentSelection(population, scores, 3)
+
+			CrossOver(population[p1Idx], population[p2Idx], newPop[i], usedBuf)
+
 			if rand.Float64() < 0.2 {
-				child = SwapMutation(child)
+				SwapMutation(newPop[i])
 			}
-			newPop[i] = child
 		}
-		population = newPop
+		population, newPop = newPop, population
 	}
 
 	bestIdx := 0
 	bestAns := fitness(population[0], opt, req.ClassConfig, weights, friends, enemies)
-	for i, seat := range population {
-		Ans := fitness(seat, opt, req.ClassConfig, weights, friends, enemies)
+	for i := 1; i < popSize; i++ {
+		Ans := fitness(population[i], opt, req.ClassConfig, weights, friends, enemies)
 		if Ans > bestAns {
 			bestAns = Ans
 			bestIdx = i
