@@ -289,7 +289,7 @@ func localSearch(r *rand.Rand, seating []int, config ClassConfig, w Weights, fri
 
 	for i := 0; i < N; i++ {
 		sIdx := seating[i]
-		if sIdx == -1 || sIdx >= nStudents {
+		if sIdx >= nStudents {
 			continue
 		}
 		score := staticScores[sIdx*N+i]
@@ -328,7 +328,7 @@ func localSearch(r *rand.Rand, seating []int, config ClassConfig, w Weights, fri
 		emptySeats := []int{}
 		filledSeats := []int{}
 		for idx, s := range seating {
-			if s == -1 {
+			if s >= nStudents {
 				emptySeats = append(emptySeats, idx)
 			} else {
 				filledSeats = append(filledSeats, idx)
