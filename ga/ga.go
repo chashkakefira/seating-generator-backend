@@ -355,10 +355,10 @@ func SwapMutation(r *rand.Rand, seating []int) {
 	seating[i1], seating[i2] = seating[i2], seating[i1]
 }
 
-func tournamentSelection(r *rand.Rand, population [][]int, scores []float64, k int) int {
-	bestIdx := r.Intn(len(population))
+func tournamentSelection(r *rand.Rand, scores []float64, k int) int {
+	bestIdx := r.Intn(len(scores))
 	for i := 1; i < k; i++ {
-		randIdx := r.Intn(len(population))
+		randIdx := r.Intn(len(scores))
 		if scores[randIdx] > scores[bestIdx] {
 			bestIdx = randIdx
 		}
@@ -477,8 +477,8 @@ func RunGA(req Request) ([]Response, float64) {
 			go func(s, e int, r *rand.Rand) {
 				defer wg.Done()
 				for i := s; i < e; i++ {
-					p1Idx := tournamentSelection(r, population, scores, 3)
-					p2Idx := tournamentSelection(r, population, scores, 3)
+					p1Idx := tournamentSelection(r, scores, 3)
+					p2Idx := tournamentSelection(r, scores, 3)
 					CrossOver(r, population[p1Idx], population[p2Idx], newPop[i], usedBufs[i])
 					if r.Float64() < 0.2 {
 						SwapMutation(r, newPop[i])
