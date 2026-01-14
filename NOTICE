@@ -1,0 +1,19 @@
+Генератор школьных рассадок (Backend)
+Copyright (C) 2026 Прокофьев Даниил <danieldzen@yandex.ru>
+
+Данное программное обеспечение разработано с использованием следующих 
+сторонних компонентов:
+
+1. Go Programming Language
+   Copyright (c) Google LLC and Authors
+   License: BSD-3-Clause (https://go.dev/LICENSE)
+
+2. github.com/google/uuid
+   Copyright (c) Google LLC
+   License: BSD-3-Clause (https://github.com/google/uuid/blob/master/LICENSE)
+
+3. github.com/joho/godotenv
+   Copyright (c) 2013 John Barton
+   License: MIT (https://github.com/joho/godotenv/blob/master/LICENSE)
+
+Полный список зависимостей доступен в файле go.sum.
