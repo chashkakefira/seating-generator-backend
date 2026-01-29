@@ -75,15 +75,15 @@ func generateSeatingHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	log.Printf("Task: %d students, %d generations, config %dx%d",
-		len(req.Students), req.Generations, req.ClassConfig.Rows, req.ClassConfig.Columns)
-	seating, fitness := ga.RunGA(req)
+	log.Printf("Task: %d students, config %dx%d",
+		len(req.Students), req.ClassConfig.Rows, req.ClassConfig.Columns)
+	seating, fitness, totalGens := ga.RunGA(req)
 	if seating == nil {
 		log.Println("GA returned nil seating")
 		http.Error(w, "Invalid input or no solution found", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Solved: Fitness=%f", fitness)
+	log.Printf("Solved: Fitness=%f, took %d generations", fitness, totalGens)
 	response := Response{
 		Seating: seating,
 		Fitness: fitness,

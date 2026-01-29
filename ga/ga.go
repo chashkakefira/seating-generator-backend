@@ -4,6 +4,7 @@
 package ga
 
 import (
+	"math"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -79,6 +80,26 @@ type Weights struct {
 	FriendBonus  float64
 	EnemyPenalty float64
 	PrefBonus    float64
+}
+
+type GAConfig struct {
+	Generations     int
+	PopSize         int
+	CrossOverChance float64
+}
+
+func calcGAConfig(studentCount int) GAConfig {
+	popSize := 300 + (studentCount * 20)
+	if popSize > 2500 {
+		popSize = 2500
+	}
+
+	return GAConfig{
+		PopSize:         popSize,
+		Generations:     5000,
+		CrossOverChance: 0.8,
+	}
+
 }
 
 func calculateWeights(pw PriorityWeights) Weights {
@@ -329,10 +350,11 @@ func tournamentSelection(r *rand.Rand, scores []float64, k int) int {
 	return bestIdx
 }
 
-func RunGA(req Request) ([]Response, float64) {
+func RunGA(req Request) ([]Response, float64, int) {
 	N := req.ClassConfig.Columns * req.ClassConfig.Rows
 	nStudents := len(req.Students)
-	popSize, generations := req.PopSize, req.Generations
+	gaConfig := calcGAConfig(nStudents)
+	popSize, generations := gaConfig.PopSize, gaConfig.Generations
 	weights := calculateWeights(req.PriorityWeights)
 	numCPU := runtime.NumCPU()
 
@@ -395,6 +417,14 @@ func RunGA(req Request) ([]Response, float64) {
 	scores := make([]float64, popSize)
 	var wg sync.WaitGroup
 
+	bestFitnessEver := -math.MaxFloat64
+	stagnationCounter := 0
+	stagnationLimit := 200 // Stop if no improvement for 150 generations
+	totalGens := 1
+	if nStudents < 20 {
+		stagnationLimit = 80
+	} // Faster stop for small classes
+
 	for gen := 0; gen < generations; gen++ {
 		chunkSize := (popSize + numCPU - 1) / numCPU
 		for w := 0; w < numCPU; w++ {
@@ -422,6 +452,24 @@ func RunGA(req Request) ([]Response, float64) {
 			}
 		}
 
+		if scores[iBest] > (bestFitnessEver + 0.001) {
+			bestFitnessEver = scores[iBest]
+			stagnationCounter = 0
+		} else {
+			stagnationCounter++
+		}
+
+		if stagnationCounter >= stagnationLimit {
+			// Early exit if results stopped improving
+			break
+		}
+
+		// Adaptive Mutation Rate: Increase if we are stuck
+		mutationRate := 0.15
+		if stagnationCounter > 50 {
+			mutationRate = 0.4 // "Shake" the population to escape local optima
+		}
+
 		copy(newPop[0], population[iBest])
 		localSearch(rands[0], newPop[0], req.ClassConfig, weights, friends, enemies, staticScores, nStudents, friendsCount, opt)
 
@@ -443,7 +491,7 @@ func RunGA(req Request) ([]Response, float64) {
 					p1Idx := tournamentSelection(r, scores, 3)
 					p2Idx := tournamentSelection(r, scores, 3)
 					CrossOver(r, population[p1Idx], population[p2Idx], newPop[i], usedBufs[i])
-					if r.Float64() < 0.2 {
+					if r.Float64() < mutationRate {
 						SwapMutation(r, newPop[i])
 					}
 				}
@@ -452,6 +500,7 @@ func RunGA(req Request) ([]Response, float64) {
 		wg.Wait()
 
 		population, newPop = newPop, population
+		totalGens++
 	}
 
 	bestIdx := 0
@@ -478,7 +527,7 @@ func RunGA(req Request) ([]Response, float64) {
 			Satisfaction: getSatisfactionDetails(bestIndices, row, col, studentIdx, weights, req.ClassConfig, friends, enemies, friendsCount, opt),
 		}
 	}
-	return response, bestAns
+	return response, bestAns, totalGens
 }
 
 func getSatisfactionDetails(seating []int, row, col, studentIndex int, w Weights, config ClassConfig, friends, enemies SocialMap, friendsCount []int, students []optStudent) SatisfactionDetails {
