@@ -34,6 +34,6 @@ go run main.go
 ```
 
 ## ⚖️ Лицензия
-Copyright (C) 2026 Прокофьев Даниил <danieldzen@yandex.ru>
+Copyright (C) 2026 Прокофьев Даниил <d@dvprokofiev.ru>
 
 Код лицензирован под GNU Affero General Public License v3.0 (AGPLv3). Подробности в файлах [LICENSE](./LICENSE) и [NOTICE](./NOTICE).

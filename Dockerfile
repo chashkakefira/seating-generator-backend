@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Прокофьев Даниил <danieldzen@yandex.ru>
+# Copyright (C) 2026 Прокофьев Даниил <d@dvprokofiev.ru>
 # Лицензировано под GNU Affero General Public License v3.0
 # Часть проекта генератора рассадок
 FROM golang:1.24.2-alpine AS builder
