@@ -1,15 +1,28 @@
-name: Build and Push Go Backend Engine Docker Image 
+name: Build and Push Go Backend Engine Docker Image
 
 on:
   push:
-    branches: [ "main", "master", "dev" ]
-    tags: [ 'v*.*.*' ]
+    branches: ["main", "master", "dev"]
+    tags: ["v*.*.*"]
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
